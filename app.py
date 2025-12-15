@@ -64,7 +64,7 @@ def generate_analysis_gemini(text_content):
     genai.configure(api_key=api_key)
     
     # On utilise toujours Flash pour la vitesse et le contexte long
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-pro')
     
     prompt = f"""
     Tu es un Directeur Technique chevronné dans le BTP. Tu analyses un CCTP pour préparer un Mémoire Technique gagnant.
