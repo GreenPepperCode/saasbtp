@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from pypdf import PdfReader
 from docx import Document
 from io import BytesIO
@@ -37,14 +37,6 @@ if not check_password():
 
 # --- 3. FONCTIONS MÉTIER (Le Moteur) ---
 
-def get_api_key():
-    """Récupère la clé API Google sécurisée."""
-    try:
-        return st.secrets["GOOGLE_API_KEY"]
-    except:
-        st.error("Erreur de configuration : Clé API manquante dans les secrets.")
-        st.stop()
-
 def extract_text_from_pdf(uploaded_file):
     """Extrait le texte brut du PDF."""
     try:
@@ -60,47 +52,53 @@ def extract_text_from_pdf(uploaded_file):
         return None
 
 def generate_analysis_gemini(text_content):
-    api_key = get_api_key()
-    genai.configure(api_key=api_key)
-    
-    # On utilise toujours Flash pour la vitesse et le contexte long
-    model = genai.GenerativeModel('gemini-pro')
-    
-    prompt = f"""
-    Tu es un Directeur Technique chevronné dans le BTP. Tu analyses un CCTP pour préparer un Mémoire Technique gagnant.
-    
-    DOCUMENT À ANALYSER :
-    {text_content} 
-    
-    TA MISSION : 
-    Ne fais pas de résumé général. Extrais uniquement les points critiques qui impactent le chiffrage et l'organisation.
-    
-    FORMAT DE RÉPONSE OBLIGATOIRE (Respecte cette structure pour le Word) :
-
-    # 1. FICHE D'IDENTITÉ DU CHANTIER
-    * **Nature des travaux :** (Ex: Rénovation thermique, Gros œuvre...)
-    * **Contraintes de site majeures :** (Accès, stockage, horaires, site occupé ?)
-    * **Délais & Planning :** (Dates clés ou durées mentionnées)
-
-    # 2. POINTS DE VIGILANCE & PIÈGES (Crucial)
-    * *Liste ici les éléments qui coûtent cher ou qu'on risque d'oublier.*
-    * (Ex: Marques imposées, normes spécifiques DTU citées, performances acoustiques/thermiques exactes à atteindre).
-    
-    # 3. MOYENS TECHNIQUES SPÉCIFIQUES REQUIS
-    * Ne mets pas "Outillage standard".
-    * Cite les engins ou matériels lourds obligatoires selon le texte (Ex: Échafaudage classe 4, Grue, Cantonnement spécifique).
-
-    # 4. ÉBAUCHE DU MÉMOIRE TECHNIQUE (Partie Rédigée)
-    *Rédige un paragraphe argumentaire professionnel pour rassurer le client sur ces 2 points :*
-    * **Notre méthodologie pour ce chantier :** (Adapte le texte aux contraintes identifiées plus haut).
-    * **Gestion de la sécurité et environnement :** (Cite les obligations du CCTP : tri des déchets, nuisances sonores).
-
-    TON : Direct, Technique, "Pro". Pas de blabla.
-    """
-    
+    """Analyse avec la NOUVELLE bibliothèque google-genai"""
     try:
-        response = model.generate_content(prompt)
+        # On récupère la clé renommée dans les secrets
+        api_key = st.secrets["GEMINI_API_KEY"]
+        
+        # Initialisation du nouveau client (Version 2025)
+        client = genai.Client(api_key=api_key)
+        
+        prompt = f"""
+        Tu es un Directeur Technique chevronné dans le BTP. Tu analyses un CCTP pour préparer un Mémoire Technique gagnant.
+        
+        DOCUMENT À ANALYSER :
+        {text_content} 
+        
+        TA MISSION : 
+        Ne fais pas de résumé général. Extrais uniquement les points critiques qui impactent le chiffrage et l'organisation.
+        
+        FORMAT DE RÉPONSE OBLIGATOIRE (Respecte cette structure pour le Word) :
+
+        # 1. FICHE D'IDENTITÉ DU CHANTIER
+        * **Nature des travaux :** (Ex: Rénovation thermique, Gros œuvre...)
+        * **Contraintes de site majeures :** (Accès, stockage, horaires, site occupé ?)
+        * **Délais & Planning :** (Dates clés ou durées mentionnées)
+
+        # 2. POINTS DE VIGILANCE & PIÈGES (Crucial)
+        * *Liste ici les éléments qui coûtent cher ou qu'on risque d'oublier.*
+        * (Ex: Marques imposées, normes spécifiques DTU citées, performances acoustiques/thermiques exactes à atteindre).
+        
+        # 3. MOYENS TECHNIQUES SPÉCIFIQUES REQUIS
+        * Ne mets pas "Outillage standard".
+        * Cite les engins ou matériels lourds obligatoires selon le texte (Ex: Échafaudage classe 4, Grue, Cantonnement spécifique).
+
+        # 4. ÉBAUCHE DU MÉMOIRE TECHNIQUE (Partie Rédigée)
+        *Rédige un paragraphe argumentaire professionnel pour rassurer le client sur ces 2 points :*
+        * **Notre méthodologie pour ce chantier :** (Adapte le texte aux contraintes identifiées plus haut).
+        * **Gestion de la sécurité et environnement :** (Cite les obligations du CCTP : tri des déchets, nuisances sonores).
+
+        TON : Direct, Technique, "Pro". Pas de blabla.
+        """
+        
+        # Appel au modèle Gemini 2.5 Flash (Le plus récent)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
         return response.text
+
     except Exception as e:
         st.error(f"Erreur IA : {e}")
         return None
@@ -109,7 +107,7 @@ def create_word_doc(text_ia):
     """Transforme le texte de l'IA en fichier .docx téléchargeable."""
     doc = Document()
     doc.add_heading('Mémoire Technique - Ébauche IA', 0)
-    doc.add_paragraph("Document généré automatiquement. À relire et compléter.")
+    doc.add_paragraph("Document généré automatiquement par l'Assistant BTP.")
     doc.add_paragraph("-" * 50)
     
     # On ajoute le contenu généré
@@ -129,7 +127,7 @@ if 'usage_count' not in st.session_state:
 QUOTA_MAX = 5 # Limite par session
 
 st.title("🏗️ Générateur de Mémoire Technique")
-st.caption("Solution IA pour artisans du bâtiment - Version Bêta")
+st.caption("Solution IA pour artisans du bâtiment - Version 2.5")
 
 st.info(f"💡 Crédits restants pour cette session : {QUOTA_MAX - st.session_state['usage_count']}")
 
@@ -145,7 +143,7 @@ if uploaded_file is not None:
         else:
             st.session_state['usage_count'] += 1
             
-            with st.spinner('Lecture du PDF et rédaction en cours (env. 20 secondes)...'):
+            with st.spinner('Lecture du PDF et rédaction en cours (env. 15 secondes)...'):
                 # 2. Extraction
                 raw_text = extract_text_from_pdf(uploaded_file)
                 
