@@ -2,7 +2,9 @@ import streamlit as st
 from google import genai
 from pypdf import PdfReader
 from docx import Document
+from docx.shared import Pt, RGBColor # <--- NOUVEAU
 from io import BytesIO
+import re # <--- NOUVEAU
 
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
@@ -104,16 +106,62 @@ def generate_analysis_gemini(text_content):
         return None
 
 def create_word_doc(text_ia):
-    """Transforme le texte de l'IA en fichier .docx téléchargeable."""
+    """Transforme le texte Markdown de l'IA en joli document Word structuré."""
     doc = Document()
-    doc.add_heading('Mémoire Technique - Ébauche IA', 0)
-    doc.add_paragraph("Document généré automatiquement par l'Assistant BTP.")
-    doc.add_paragraph("-" * 50)
     
-    # On ajoute le contenu généré
-    doc.add_paragraph(text_ia)
+    # --- STYLE DU TITRE PRINCIPAL ---
+    main_title = doc.add_heading('Mémoire Technique', 0)
+    main_title.alignment = 1 # Centré
     
-    # Sauvegarde en mémoire tampon (RAM)
+    doc.add_paragraph("Généré par Assistant BTP - " + str(st.secrets.get("USER_NAME", "Entreprise")), style='Subtitle')
+    doc.add_paragraph("-" * 70)
+
+    # Fonction interne pour gérer le **Gras** au milieu des phrases
+    def add_text_with_bold(paragraph, text):
+        # On coupe le texte à chaque fois qu'on trouve "**"
+        parts = re.split(r'(\*\*.*?\*\*)', text)
+        for part in parts:
+            if part.startswith('**') and part.endswith('**'):
+                # C'est du gras (on enlève les étoiles et on met en gras)
+                run = paragraph.add_run(part[2:-2])
+                run.bold = True
+            else:
+                # C'est du texte normal
+                paragraph.add_run(part)
+
+    # --- TRAITEMENT LIGNE PAR LIGNE ---
+    lines = text_ia.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue # On saute les lignes vides
+
+        # Cas 1 : C'est un grand titre (commence par #)
+        if line.startswith('# '):
+            # On enlève le # et on crée un Titre 1
+            h = doc.add_heading(line[2:], level=1)
+            # Optionnel : changer la couleur du titre (ex: bleu foncé)
+            for run in h.runs:
+                run.font.color.rgb = RGBColor(0, 51, 102) 
+
+        # Cas 2 : C'est un sous-titre (commence par ##)
+        elif line.startswith('## '):
+            doc.add_heading(line[3:], level=2)
+
+        # Cas 3 : C'est une liste à puces (commence par * ou -)
+        elif line.startswith('* ') or line.startswith('- '):
+            p = doc.add_paragraph(style='List Bullet')
+            add_text_with_bold(p, line[2:])
+            
+        # Cas 4 : C'est du texte normal
+        else:
+            p = doc.add_paragraph()
+            add_text_with_bold(p, line)
+            # On justifie le texte pour faire propre
+            p.alignment = 3 
+
+    # Sauvegarde en mémoire
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
